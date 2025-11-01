@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xao Hub - Real-time Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: #000000;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(255, 255, 255, 0.02) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 999;
+            animation: scanline 8s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            margin-bottom: 50px;
+            padding: 50px 0;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 200px;
+            height: 2px;
+            background: linear-gradient(90deg, #ffffff, transparent);
+            animation: slideLine 3s ease-in-out infinite;
+        }
+
+        @keyframes slideLine {
+            0%, 100% { transform: translateX(0); opacity: 1; }
+            50% { transform: translateX(calc(100vw - 240px)); opacity: 0.5; }
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .logo-text {
+            font-size: 3.5em;
+            font-weight: 800;
+            letter-spacing: -3px;
+            color: #ffffff;
+            text-transform: uppercase;
+            position: relative;
+            display: inline-block;
+        }
+
+        .logo-text::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            background: #ffffff;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        .subtitle {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .status-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 28px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-box.connected {
+            border-color: #ffffff;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .status-box.disconnected {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            background: #ffffff;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.off {
+            background: rgba(255, 255, 255, 0.3);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.95); }
+        }
+
+        .status-text {
+            font-size: 0.85em;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #ffffff, transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+
+        .card:hover::before {
+            transform: translateX(100%);
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-5px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-header {
+            padding: 25px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .card-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .card-counter {
+            padding: 6px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.85em;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .card-body {
+            padding: 30px;
+        }
+
+        .data-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .data-row::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #ffffff;
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .data-row:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+            padding-left: 28px;
+        }
+
+        .data-row:hover::before {
+            transform: scaleY(1);
+        }
+
+        .data-key {
+            font-size: 0.95em;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .data-val {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+
+        .player-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 450px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .player-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateX(5px);
+        }
+
+        .player-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.4em;
+            letter-spacing: -1px;
+        }
+
+        .player-details {
+            flex: 1;
+        }
+
+        .player-name {
+            font-weight: 700;
+            font-size: 1.05em;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .player-sub {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+        }
+
+        .toggle-indicator {
+            padding: 8px 20px;
+            border: 1px solid;
+            font-size: 0.85em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-active {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #ffffff;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-inactive {
+            background: transparent;
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .footer-info {
+            margin-top: 40px;
+            padding: 25px 30px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+
+        .empty-box {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .empty-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .empty-desc {
+            font-size: 0.85em;
+            letter-spacing: 1px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            transition: background 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .loading-anim {
+            animation: loadPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loadPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        /* สไตล์สำหรับปุ่ม Info */
+        .info-button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 8px 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .info-button::after {
+            content: '→';
+            font-weight: 700;
+            transition: transform 0.3s ease;
+        }
+
+        .info-button:hover::after {
+            transform: translateX(3px);
+        }
+
+        .inventory-footer {
+            display: flex;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        /* สไตล์สำหรับ Modal - ปรับให้กว้างขึ้นเป็นสี่เหลี่ยม */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: rgba(10, 10, 10, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            width: 95%;
+            max-width: 1200px;
+            height: 85vh;
+            max-height: 800px;
+            overflow: hidden;
+            position: relative;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 25px 35px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #ffffff;
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        .modal-body {
+            padding: 35px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            flex: 1;
+        }
+
+        .modal-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            padding: 25px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 120px;
+        }
+
+        .modal-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ffffff, transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+
+        .modal-item:hover::before {
+            transform: translateX(100%);
+        }
+
+        .modal-item:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .item-name {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .item-value {
+            font-size: 1.8em;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+
+        .modal-footer {
+            padding: 25px 35px;
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .total-items {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 2px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .inventory-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .logo-text {
+                font-size: 2.5em;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+                align-items: flex-start;
+            }
+
+            .modal {
+                width: 98%;
+                height: 90vh;
+                max-height: none;
+            }
+
+            .modal-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 15px;
+            }
+
+            .modal-item {
+                padding: 20px 15px;
+                min-height: 100px;
+            }
+
+            .item-name {
+                font-size: 0.9em;
+            }
+
+            .item-value {
+                font-size: 1.5em;
+            }
+
+            .inventory-stats {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            }
+            
+            .modal-header {
+                padding: 20px;
+            }
+            
+            .modal-body {
+                padding: 20px;
+            }
+            
+            .modal-footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+    
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="brand">
+                    <div class="logo-text">XAO HUB</div>
+                    <div class="subtitle">Real-time Monitor System</div>
+                </div>
+                <div class="status-box disconnected" id="connectionStatus">
+                    <div class="status-indicator off"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Player Info -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Player Info</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-list">
+                        <div class="data-row">
+                            <span class="data-key">Username</span>
+                            <span class="data-val" id="playerName">-</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-key">Display Name</span>
+                            <span class="data-val" id="displayName">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Inventory</div>
+                    <div class="card-counter" id="inventoryCount">0</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-list" id="inventoryList">
+                        <div class="data-row loading-anim">
+                            <span class="data-key">Loading data...</span>
+                        </div>
+                    </div>
+                    <div class="inventory-footer" id="inventoryFooter"></div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Player Status</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-list" id="statusList">
+                        <div class="data-row loading-anim">
+                            <span class="data-key">Loading data...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Car Storage -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Car Storage</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-list">
+                        <div class="data-row">
+                            <span class="data-key">Car Key</span>
+                            <span class="data-val" id="carKey">-</span>
+                        </div>
+                    </div>
+                    <div class="data-list" id="carStorageList" style="margin-top: 15px;">
+                        <div class="data-row loading-anim">
+                            <span class="data-key">Loading data...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto Farm Status -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Auto Farm Status</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-list" id="autoFarmStatus">
+                        <div class="data-row loading-anim">
+                            <span class="data-key">Loading data...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Server Players -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Server Players</div>
+                    <div class="card-counter" id="playerCount">0</div>
+                </div>
+                <div class="card-body">
+                    <div class="player-grid" id="playerList">
+                        <div class="empty-box loading-anim">
+                            <div class="empty-title">Loading</div>
+                            <div class="empty-desc">Waiting for data...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-info" id="lastUpdate">
+            Last Update: -
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแสดง Inventory ทั้งหมด -->
+    <div class="modal-overlay" id="inventoryModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Full Inventory</div>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body" id="modalInventoryList">
+                <!-- สถิติ Inventory -->
+                <div class="inventory-stats" id="inventoryStats">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Items</div>
+                        <div class="stat-value" id="statsTotal">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Quantity</div>
+                        <div class="stat-value" id="statsQuantity">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Most Items</div>
+                        <div class="stat-value" id="statsMost">-</div>
+                    </div>
+                </div>
+                
+                <!-- รายการ Inventory ทั้งหมดจะแสดงที่นี่ -->
+                <div class="modal-grid" id="modalGrid">
+                    <!-- Grid items will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="total-items" id="modalTotalItems">Total: 0 items</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let ws;
+    let reconnectTimer;
+    let lastDataTime = 0;
+    let dataSource = 'none';
+    let currentInventory = {};
+
+    function connect() {
+        ws = new WebSocket('ws://localhost:3000');
+
+        ws.onopen = () => {
+            console.log('✅ Connected to server');
+            updateConnectionStatus('connected', 'Connected to Server');
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            lastDataTime = Date.now();
+            
+            if (data.source === 'roblox') {
+                dataSource = 'roblox';
+                updateConnectionStatus('connected', 'Live Data from Roblox');
+            } else if (data.heartbeat) {
+                updateConnectionStatus('connected', 'Connected to Server');
+            } else {
+                dataSource = 'mock';
+                updateConnectionStatus('connected', 'Mock Data');
+            }
+            
+            updateDashboard(data);
+        };
+
+        ws.onerror = (error) => {
+            console.error('❌ WebSocket error:', error);
+            updateConnectionStatus('error', 'Connection Error');
+        };
+
+        ws.onclose = () => {
+            console.log('❌ Disconnected from server');
+            updateConnectionStatus('disconnected', 'Disconnected');
+            
+            reconnectTimer = setTimeout(connect, 3000);
+        };
+    }
+
+    function updateConnectionStatus(status, message) {
+        const statusBox = document.getElementById('connectionStatus');
+        const indicator = statusBox.querySelector('.status-indicator');
+        const text = statusBox.querySelector('.status-text');
+        
+        statusBox.className = 'status-box ' + status;
+        
+        if (status === 'connected') {
+            indicator.className = 'status-indicator';
+            text.textContent = message;
+        } else if (status === 'disconnected') {
+            indicator.className = 'status-indicator off';
+            text.textContent = message;
+        } else if (status === 'error') {
+            indicator.className = 'status-indicator off';
+            indicator.style.background = '#ff4444';
+            text.textContent = message;
+        }
+        
+
+        if (status === 'connected' && dataSource === 'roblox') {
+            const timeSinceLastData = Date.now() - lastDataTime;
+            if (timeSinceLastData > 10000) {
+                text.textContent = 'No Data from Roblox';
+                indicator.style.background = '#ffaa00';
+            }
+        }
+    }
+
+    function updateDashboard(data) {
+        document.getElementById('playerName').textContent = data.player?.name || '-';
+        document.getElementById('displayName').textContent = data.player?.displayName || '-';
+
+        // อัปเดต Inventory
+        const inventoryList = document.getElementById('inventoryList');
+        const inventoryFooter = document.getElementById('inventoryFooter');
+        inventoryList.innerHTML = '';
+        inventoryFooter.innerHTML = '';
+        
+        if (data.inventory && Object.keys(data.inventory).length > 0) {
+            currentInventory = data.inventory;
+            const itemCount = Object.keys(data.inventory).length;
+            document.getElementById('inventoryCount').textContent = itemCount;
+            
+            // แสดงเฉพาะ 3 รายการแรก
+            const items = Object.entries(data.inventory);
+            const displayItems = items.slice(0, 3);
+            
+            for (const [item, value] of displayItems) {
+                inventoryList.innerHTML += `
+                    <div class="data-row">
+                        <span class="data-key">${item}</span>
+                        <span class="data-val">${value.toLocaleString()}</span>
+                    </div>
+                `;
+            }
+            
+            // ถ้ามีมากกว่า 3 รายการ ให้แสดงปุ่ม Info
+            if (itemCount > 3) {
+                inventoryFooter.innerHTML = `
+                    <button class="info-button" onclick="showFullInventory()">
+                        View All Items (${itemCount})
+                    </button>
+                `;
+            }
+        } else {
+            currentInventory = {};
+            document.getElementById('inventoryCount').textContent = '0';
+            inventoryList.innerHTML = `
+                <div class="empty-box">
+                    <div class="empty-title">Empty</div>
+                    <div class="empty-desc">No items in inventory</div>
+                </div>
+            `;
+        }
+
+        // อัปเดตข้อมูลอื่นๆ
+        const statusList = document.getElementById('statusList');
+        statusList.innerHTML = '';
+        if (data.status && Object.keys(data.status).length > 0) {
+            for (const [stat, value] of Object.entries(data.status)) {
+                statusList.innerHTML += `
+                    <div class="data-row">
+                        <span class="data-key">${stat}</span>
+                        <span class="data-val">${value}</span>
+                    </div>
+                `;
+            }
+        } else {
+            statusList.innerHTML = `
+                <div class="empty-box">
+                    <div class="empty-title">No Data</div>
+                    <div class="empty-desc">Status information unavailable</div>
+                </div>
+            `;
+        }
+
+        document.getElementById('carKey').textContent = data.carKey || '-';
+        const carStorageList = document.getElementById('carStorageList');
+        carStorageList.innerHTML = '';
+        if (data.carStorage && Object.keys(data.carStorage).length > 0) {
+            for (const [item, value] of Object.entries(data.carStorage)) {
+                carStorageList.innerHTML += `
+                    <div class="data-row">
+                        <span class="data-key">${item}</span>
+                        <span class="data-val">${value.toLocaleString()}</span>
+                    </div>
+                `;
+            }
+        } else {
+            carStorageList.innerHTML = `
+                <div class="empty-box">
+                    <div class="empty-title">Empty</div>
+                    <div class="empty-desc">No items in car storage</div>
+                </div>
+            `;
+        }
+
+        const autoFarmStatus = document.getElementById('autoFarmStatus');
+        autoFarmStatus.innerHTML = '';
+        if (data.autoFarmStatus) {
+            for (const [key, value] of Object.entries(data.autoFarmStatus)) {
+                const statusClass = value ? 'toggle-active' : 'toggle-inactive';
+                const statusText = value ? 'Active' : 'Inactive';
+                autoFarmStatus.innerHTML += `
+                    <div class="data-row">
+                        <span class="data-key">${key}</span>
+                        <span class="toggle-indicator ${statusClass}">${statusText}</span>
+                    </div>
+                `;
+            }
+        }
+
+        document.getElementById('playerCount').textContent = data.playerCount || 0;
+        const playerList = document.getElementById('playerList');
+        playerList.innerHTML = '';
+        if (data.serverPlayers && data.serverPlayers.length > 0) {
+            data.serverPlayers.forEach(player => {
+                const initial = player.Name.charAt(0).toUpperCase();
+                playerList.innerHTML += `
+                    <div class="player-item">
+                        <div class="player-icon">${initial}</div>
+                        <div class="player-details">
+                            <div class="player-name">${player.Name}</div>
+                            <div class="player-sub">${player.DisplayName}</div>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            playerList.innerHTML = `
+                <div class="empty-box">
+                    <div class="empty-title">No Players</div>
+                    <div class="empty-desc">Server is empty</div>
+                </div>
+            `;
+        }
+
+        // อัปเดตเวลาล่าสุด
+        const now = new Date();
+        const timeStr = now.toLocaleString('th-TH', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+        
+        let sourceText = '';
+        if (data.source === 'roblox') {
+            sourceText = ' • Live from Roblox';
+        } else if (data.heartbeat) {
+            sourceText = ' • Server Heartbeat';
+        } else {
+            sourceText = ' • Mock Data';
+        }
+        
+        document.getElementById('lastUpdate').textContent = `Last Update: ${timeStr}${sourceText}`;
+    }
+
+    // ฟังก์ชันแสดง Inventory ทั้งหมดใน Modal
+    function showFullInventory() {
+        const modal = document.getElementById('inventoryModal');
+        const modalGrid = document.getElementById('modalGrid');
+        const totalItems = document.getElementById('modalTotalItems');
+        const statsTotal = document.getElementById('statsTotal');
+        const statsQuantity = document.getElementById('statsQuantity');
+        const statsMost = document.getElementById('statsMost');
+        
+        // อัปเดตจำนวนไอเท็มทั้งหมด
+        const itemCount = Object.keys(currentInventory).length;
+        totalItems.textContent = `Total: ${itemCount} items`;
+        
+        // คำนวณสถิติ
+        let totalQuantity = 0;
+        let mostItem = { name: '-', value: 0 };
+        
+        for (const [item, value] of Object.entries(currentInventory)) {
+            totalQuantity += value;
+            if (value > mostItem.value) {
+                mostItem = { name: item, value: value };
+            }
+        }
+        
+        // อัปเดตสถิติ
+        statsTotal.textContent = itemCount;
+        statsQuantity.textContent = totalQuantity.toLocaleString();
+        statsMost.textContent = mostItem.name !== '-' ? `${mostItem.name} (${mostItem.value.toLocaleString()})` : '-';
+        
+        // สร้างรายการไอเท็มใน Modal
+        modalGrid.innerHTML = '';
+        
+        if (itemCount > 0) {
+            for (const [item, value] of Object.entries(currentInventory)) {
+                modalGrid.innerHTML += `
+                    <div class="modal-item">
+                        <div class="item-name">${item}</div>
+                        <div class="item-value">${value.toLocaleString()}</div>
+                    </div>
+                `;
+            }
+        } else {
+            modalGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
+                    <div class="empty-title">Empty Inventory</div>
+                    <div class="empty-desc">No items to display</div>
+                </div>
+            `;
+        }
+        
+        // แสดง Modal
+        modal.classList.add('active');
+    }
+
+    // ปิด Modal
+    document.getElementById('closeModal').addEventListener('click', function() {
+        document.getElementById('inventoryModal').classList.remove('active');
+    });
+
+    // ปิด Modal เมื่อคลิกนอกพื้นที่
+    document.getElementById('inventoryModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.remove('active');
+        }
+    });
+
+ 
+    connect();
+
+    setInterval(() => {
+        if (dataSource === 'roblox' && Date.now() - lastDataTime > 10000) {
+            updateConnectionStatus('connected', 'No Data from Roblox');
+        }
+    }, 5000);
+</script>
+</body>
+</html>
